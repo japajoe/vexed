@@ -232,7 +232,6 @@ namespace vexed {
         return load(fontData);
     }
 
-    //bool Font::load(const std::string &filepath) {
     bool Font::load(const uint8_t *data) {
         uint32_t fontCount = stbtt_GetNumberOfFonts(data);
 
