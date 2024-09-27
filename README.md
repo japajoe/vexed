@@ -61,4 +61,4 @@ int main() {
 ```
 
 # Example application
-![](examples/breakout.png) 
+![](example/breakout.png) 
