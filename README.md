@@ -1,7 +1,7 @@
 # vexed 
 A small library for making 2D applications with OpenGL
 
-# Example
+# Demo
 ```cpp
 #include "vexed/application.h"
 #include <cmath>
@@ -59,3 +59,6 @@ int main() {
     application.run();
 }
 ```
+
+# Example application
+![](examples/breakout.png) 

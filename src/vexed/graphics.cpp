@@ -312,9 +312,6 @@ namespace vexed {
         if (count == 0) 
             return;
 
-        if(count % 2 != 0)
-            return;
-
         if (segments == nullptr) 
             return;
 
