@@ -1,5 +1,5 @@
 #include "font.h"
-#include "../glad/glad.h"
+#include "../../glad/glad.h"
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -9,6 +9,8 @@
 #include "../stb/stb_truetype.h"
 
 namespace vexed {
+    std::unordered_map<std::string,Font> Font::fonts;
+
     Font::Font() {
         texture = 0;
         pixelSize = 14;
@@ -16,16 +18,16 @@ namespace vexed {
         textureHeight = 512;
     }
 
-    Font::Font(const std::string &filepath, uint32_t pixelSize) {
-        this->pixelSize = pixelSize;
-        texture = 0;
-        loadFromFile(filepath);
-    }
-
-    Font::Font(const uint8_t *fontData, uint32_t pixelSize) {
-        this->pixelSize = pixelSize;
-        texture = 0;
-        loadFromMemory(fontData);
+    Font::Font(const Font &other) {
+        this->fontInfo = other.fontInfo;
+        this->pixelSize = other.pixelSize;
+        this->texture = other.texture;
+        this->codePointOfFirstChar = other.codePointOfFirstChar;
+        this->textureWidth = other.textureWidth;
+        this->textureHeight = other.textureHeight;
+        this->lineHeight = other.lineHeight;
+        this->characters = other.characters;
+        this->quads = other.quads;
     }
 
     bool Font::load(const std::string &filepath, uint32_t pixelSize) {
@@ -156,10 +158,37 @@ namespace vexed {
         }
 
         //If no new line characters exist, return default value
-        if(lineCount == 0)
-            return getLineHeight() * (fontSize / getPixelSize());
+        if(lineCount == 0) {
+            //return getLineHeight() * (fontSize / getPixelSize());
+            return fontSize;
+        }
 
         return lineCount * (getLineHeight() * (fontSize / getPixelSize()));
+    }
+
+    float Font::computeHeightOfBiggestCharacter(const std::string &text, float fontSize) {
+        float size = 0.0f;
+       
+        for(char ch : text) {
+            if(ch == '\n') {
+                continue;
+            }
+
+            int glyphIndex = (ch - codePointOfFirstChar);
+            // Skip unknown glyphs
+            if (glyphIndex < 0 || glyphIndex >= getNumberOfCharacters()) {
+                continue;
+            }
+
+            auto &glyph = characters[glyphIndex];
+
+            float glyphHeight = (glyph.y1 - glyph.y0);
+            if (glyphHeight > size) {
+                size = glyphHeight;
+            }
+        }
+
+        return size * fontSize / getPixelSize();
     }
 
     float Font::getStringWidth(const std::string &text, uint32_t from, uint32_t to, float fontSize) {
@@ -334,5 +363,25 @@ namespace vexed {
         glBindTexture(GL_TEXTURE_2D, 0);
 
         return true;
+    }
+
+    Font *Font::add(const std::string &name, const Font &font) {
+        if(fonts.count(name) > 0)
+            return nullptr;
+        fonts[name] = font;
+        return &fonts[name];
+    }
+
+    Font *Font::find(const std::string &name) {
+        if(fonts.count(name) == 0)
+            return nullptr;
+        return &fonts[name];
+    }
+
+    void Font::remove(const std::string &name, const Font &font) {
+        if(fonts.count(name) == 0)
+            return;
+        fonts[name].destroy();
+        fonts.erase(name);
     }
 }

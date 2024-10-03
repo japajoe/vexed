@@ -1,5 +1,5 @@
 #include "texture.h"
-#include "../glad/glad.h"
+#include "../../glad/glad.h"
 #include <stdexcept>
 
 namespace vexed {

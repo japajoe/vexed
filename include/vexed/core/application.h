@@ -25,6 +25,7 @@ namespace vexed {
         TimerInstance tp1;
         TimerInstance tp2;
         float deltaTime;
+        float elapsedTime;
         
         Timer() {
             tp1 = std::chrono::system_clock::now();
@@ -37,6 +38,7 @@ namespace vexed {
             std::chrono::duration<float> elapsed = tp2 - tp1;
             tp1 = tp2;
             deltaTime = elapsed.count();
+            elapsedTime += deltaTime;
         }
     };
 
@@ -69,8 +71,10 @@ namespace vexed {
         inline Graphics *getGraphics() { return &graphics; }
         inline Keyboard *getKeyboard() { return &keyboard; }
         inline Mouse *getMouse() { return &mouse; }
+        inline float getTime() const { return timer.elapsedTime; }
         inline float getDeltaTime() const { return timer.deltaTime; }
         inline float getFPS() const { return averageFPS; }
+        inline static Application *getInstance() { return instance; }
     private:
         Configuration config;
         GLFWwindow *window;
@@ -80,11 +84,12 @@ namespace vexed {
         Mouse mouse;
         Timer timer;
         float averageFPS;
+        static Application *instance;
         static void onFramebufferResize(GLFWwindow* window, int width, int height);
+        static void onWindowPos(GLFWwindow *window, int xpos, int ypos);
         static void onKeyPress(GLFWwindow *window, int32_t key, int32_t scancode, int32_t action, int32_t mods);
         static void onCharPress(GLFWwindow* window, uint32_t codepoint);
         static void onMouseButtonPress(GLFWwindow *window, int32_t button, int32_t action, int32_t mods);
-        static void onMouseMove(GLFWwindow *window, double x, double y);
         static void onMouseScroll(GLFWwindow *window, double xoffset, double yoffset);
     };
 }

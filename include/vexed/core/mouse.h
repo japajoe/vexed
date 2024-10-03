@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <unordered_map>
+#include <functional>
 
 namespace vexed {
     #define GLFW__MOUSE_BUTTON_1         0
@@ -30,22 +31,36 @@ namespace vexed {
         int up;
         int pressed;
         int state;
+        double lastRepeatTime;
+        bool repeat;
 
         ButtonState() {
             down = 0;
             up = 0;
             pressed = 0;
             state = 0;
+            lastRepeatTime = 0.0;
+            repeat = false;
         }
     };
 
+    using ButtonDownEvent = std::function<void(ButtonCode buttoncode)>;
+    using ButtonUpEvent = std::function<void(ButtonCode buttoncode)>;
+    using ButtonPressEvent = std::function<void(ButtonCode buttoncode)>;
+    using ButtonRepeatEvent = std::function<void(ButtonCode buttoncode)>;
+
     class Mouse {
     public:
+        ButtonDownEvent buttonDown;
+        ButtonUpEvent buttonUp;
+        ButtonPressEvent buttonPress;
+        ButtonRepeatEvent buttonRepeat;
         Mouse();
         void initialize();
         void newFrame();
         void endFrame();
         void setPosition(float x, float y);
+        void setWindowPosition(float x, float y);
         void setScrollDirection(float x, float y);
         void setState(ButtonCode buttoncode, int32_t state);
         bool getButton(ButtonCode buttoncode);
@@ -53,6 +68,8 @@ namespace vexed {
         bool getButtonUp(ButtonCode buttoncode);
         float getX() const;
         float getY() const;
+        float getAbsoluteX() const;
+        float getAbsoluteY() const;
         float getDeltaX() const;
         float getDeltaY() const;
         float getScrollX() const;
@@ -61,10 +78,14 @@ namespace vexed {
         std::unordered_map<ButtonCode,ButtonState> states;
         float positionX;
         float positionY;
+        float windowPositionX;
+        float windowPositionY;
         float deltaX;
         float deltaY;
         float scrollX;
         float scrollY;
+        double repeatDelay;
+        double repeatInterval;
     };
 }
 

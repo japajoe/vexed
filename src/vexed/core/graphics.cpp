@@ -1,8 +1,10 @@
 #include "graphics.h"
-#include "../glad/glad.h"
+#include "../../glad/glad.h"
 #include <cstring>
 #include <cmath>
+#include <cfloat>
 #include <iostream>
+#include <regex>
 
 namespace vexed {
     Graphics::Graphics() {
@@ -52,7 +54,7 @@ namespace vexed {
     }
 
     void Graphics::newFrame(float deltaTime) {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
 
         numDrawCalls = itemCount;
@@ -77,9 +79,8 @@ namespace vexed {
         };
 
         storeState();
-
         
-        glEnable(GL_DEPTH_TEST);
+        glDisable(GL_DEPTH_TEST);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glBlendEquation(GL_FUNC_ADD);
@@ -103,7 +104,7 @@ namespace vexed {
         for(size_t i = 0; i < itemCount; i++) {
             Rectangle rect = items[i].clippingRect;
             bool scissorEnabled = false;
-            if(!rect.IsZero()) {
+            if(!rect.isZero()) {
                 glEnable(GL_SCISSOR_TEST);
                 glScissor(rect.x, rect.y, rect.width, rect.height);
                 scissorEnabled = true;
@@ -132,7 +133,7 @@ namespace vexed {
                 glUniformMatrix4fv(glGetUniformLocation(lastShaderId, "uProjection"), 1, GL_FALSE, &projectionMatrix[0][0]);
                 glUniform1f(glGetUniformLocation(lastShaderId, "uTime"), elapsedTime);
                 if(uniformUpdate)
-                    uniformUpdate(lastShaderId);
+                    uniformUpdate(lastShaderId, items[i].userData);
             }
 
             glDrawElements(GL_TRIANGLES, items[i].indiceCount, GL_UNSIGNED_INT, (void*)(drawOffset * sizeof(uint32_t)));
@@ -185,16 +186,12 @@ namespace vexed {
         glDepthFunc(glState.depthFunc);
     }
 
-    void Graphics::addRectangle(const Vector3 &position, const Vector2 &size, const Color &color) {
-        addRectangle(position, size, 0, color, Rectangle(0, 0, 0, 0), 0);
-    }
-
-    void Graphics::addRectangle(const Vector3 &position, const Vector2 &size, float rotationDegrees, const Color &color, const Rectangle &clippingRect, uint32_t shaderId) {
+    void Graphics::addRectangle(const Vector2 &position, const Vector2 &size, float rotationDegrees, const Color &color, const Rectangle &clippingRect, uint32_t shaderId, void *userData) {
         Vertex vertices[4] = {
-            { Vector3(position.x, position.y, position.z), Vector2(0, 1), color }, // top left
-            { Vector3(position.x, position.y + size.y, position.z), Vector2(0, 0), color }, // bottom left
-            { Vector3(position.x + size.x, position.y + size.y, position.z), Vector2(1, 0), color }, // bottom right
-            { Vector3(position.x + size.x, position.y, position.z), Vector2(1, 1), color }  // top right
+            { Vector2(position.x, position.y), Vector2(0, 1), color }, // top left
+            { Vector2(position.x, position.y + size.y), Vector2(0, 0), color }, // bottom left
+            { Vector2(position.x + size.x, position.y + size.y), Vector2(1, 0), color }, // bottom right
+            { Vector2(position.x + size.x, position.y), Vector2(1, 1), color }  // top right
         };
 
         if(rotationDegrees != 0.0f)
@@ -214,15 +211,12 @@ namespace vexed {
         command.textureIsFont = false;
         command.shaderId = shaderId;
         command.clippingRect = clippingRect;
+        command.userData = userData;
 
         addVertices(&command);
     }
-    
-    void Graphics::addCircle(const Vector3 &position, float radius, int segments, const Color &color) {
-        addCircle(position, radius, segments, 0, color, Rectangle(0, 0, 0, 0), 0);
-    }
 
-    void Graphics::addCircle(const Vector3 &position, float radius, int segments, float rotationDegrees, const Color &color, const Rectangle &clippingRect, uint32_t shaderId) {
+    void Graphics::addCircle(const Vector2 &position, float radius, int segments, float rotationDegrees, const Color &color, const Rectangle &clippingRect, uint32_t shaderId, void *userData) {
         if(segments < 3)
             segments = 3;
 
@@ -234,7 +228,7 @@ namespace vexed {
 
         for (int i = 0; i < segments; ++i) {
             float angle = 2.0f * M_PI * i / segments;
-            vertexBufferTemp[i].position = Vector3(radius * cos(angle), radius * sin(angle), position.z);
+            vertexBufferTemp[i].position = Vector2(radius * cos(angle), radius * sin(angle));
             vertexBufferTemp[i].uv = Vector2(0.5f + 0.5f * cos(angle), 0.5f + 0.5f * sin(angle));
             vertexBufferTemp[i].color = color;
             vertexBufferTemp[i].position.x += position.x;
@@ -259,15 +253,12 @@ namespace vexed {
         command.textureIsFont = false;
         command.shaderId = shaderId;
         command.clippingRect = clippingRect;
+        command.userData = userData;
 
         addVertices(&command);
     }
 
-    void Graphics::addLine(const Vector3 &p1, const Vector3 &p2, float thickness, const Color &color) {
-        addLine(p1, p2, thickness, color, Rectangle(0, 0, 0, 0), 0);
-    }
-
-    void Graphics::addLine(const Vector3 &p1, const Vector3 &p2, float thickness, const Color &color, const Rectangle &clippingRect, uint32_t shaderId) {
+    void Graphics::addLine(const Vector2 &p1, const Vector2 &p2, float thickness, const Color &color, const Rectangle &clippingRect, uint32_t shaderId, void *userData) {
         Vector2 direction(p2.x - p1.x, p2.y - p1.y);
         float length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
 
@@ -280,10 +271,10 @@ namespace vexed {
                                         direction.x * thickness * 0.5f);
 
         Vertex vertices[4] = {
-            { Vector3(p1.x + perpendicular.x, p1.y + perpendicular.y, p1.z), Vector2(0, 1), color }, // Bottom left
-            { Vector3(p1.x - perpendicular.x, p1.y - perpendicular.y, p1.z), Vector2(0, 0), color }, // Top left
-            { Vector3(p2.x - perpendicular.x, p2.y - perpendicular.y, p2.z), Vector2(1, 0), color }, // Top right
-            { Vector3(p2.x + perpendicular.x, p2.y + perpendicular.y, p2.z), Vector2(1, 1), color }  // Bottom right
+            { Vector2(p1.x + perpendicular.x, p1.y + perpendicular.y), Vector2(0, 1), color }, // Bottom left
+            { Vector2(p1.x - perpendicular.x, p1.y - perpendicular.y), Vector2(0, 0), color }, // Top left
+            { Vector2(p2.x - perpendicular.x, p2.y - perpendicular.y), Vector2(1, 0), color }, // Top right
+            { Vector2(p2.x + perpendicular.x, p2.y + perpendicular.y), Vector2(1, 1), color }  // Bottom right
         };
 
         uint32_t indices[6] = {
@@ -300,15 +291,12 @@ namespace vexed {
         command.textureIsFont = false;
         command.shaderId = shaderId;
         command.clippingRect = clippingRect;
+        command.userData = userData;
 
         addVertices(&command);
     }
 
-    void Graphics::addLines(const Vector3 *segments, size_t count, float thickness, const Color &color) {
-        addLines(segments, count, thickness, color, Rectangle(0, 0, 0, 0), 0);
-    }
-
-    void Graphics::addLines(const Vector3 *segments, size_t count, float thickness, const Color &color, const Rectangle &clippingRect, uint32_t shaderId) {
+    void Graphics::addLines(const Vector2 *segments, size_t count, float thickness, const Color &color, const Rectangle &clippingRect, uint32_t shaderId, void *userData) {
         if (count == 0) 
             return;
 
@@ -326,8 +314,8 @@ namespace vexed {
         size_t indiceIndex = 0;
 
         for(size_t i = 0; i < pointCount; i+=2) {
-            Vector3 p1 = segments[i+0];
-            Vector3 p2 = segments[i+1];
+            Vector2 p1 = segments[i+0];
+            Vector2 p2 = segments[i+1];
 
             Vector2 direction(p2.x - p1.x, p2.y - p1.y);
 
@@ -342,10 +330,10 @@ namespace vexed {
             Vector2 perpendicular = Vector2(-direction.y * thickness * 0.5f, 
                                             direction.x * thickness * 0.5f);
 
-            vertexBufferTemp[vertexIndex+0] = { Vector3(p1.x + perpendicular.x, p1.y + perpendicular.y, p1.z), Vector2(0, 1), color };
-            vertexBufferTemp[vertexIndex+1] = { Vector3(p1.x - perpendicular.x, p1.y - perpendicular.y, p1.z), Vector2(0, 0), color };
-            vertexBufferTemp[vertexIndex+2] = { Vector3(p2.x - perpendicular.x, p2.y - perpendicular.y, p2.z), Vector2(1, 0), color };
-            vertexBufferTemp[vertexIndex+3] = { Vector3(p2.x + perpendicular.x, p2.y + perpendicular.y, p2.z), Vector2(1, 1), color };
+            vertexBufferTemp[vertexIndex+0] = { Vector2(p1.x + perpendicular.x, p1.y + perpendicular.y), Vector2(0, 1), color };
+            vertexBufferTemp[vertexIndex+1] = { Vector2(p1.x - perpendicular.x, p1.y - perpendicular.y), Vector2(0, 0), color };
+            vertexBufferTemp[vertexIndex+2] = { Vector2(p2.x - perpendicular.x, p2.y - perpendicular.y), Vector2(1, 0), color };
+            vertexBufferTemp[vertexIndex+3] = { Vector2(p2.x + perpendicular.x, p2.y + perpendicular.y), Vector2(1, 1), color };
 
             indexBufferTemp[indiceIndex+0] = 0 + vertexIndex;
             indexBufferTemp[indiceIndex+1] = 1 + vertexIndex;
@@ -367,30 +355,137 @@ namespace vexed {
         command.textureIsFont = false;
         command.shaderId = shaderId;
         command.clippingRect = clippingRect;
+        command.userData = userData;
 
         addVertices(&command);
     }
 
-    void Graphics::addTriangle(const Vector3 &position, const Vector2 &size, const Color &color) {
-        addTriangle(position, size, 0, color, Rectangle(0, 0, 0, 0), 0);
+    void Graphics::addPlotLines(const Vector2 &position, const Vector2 &size, const float *data, int valuesCount, float thickness, const Color &color, float scaleMin, float scaleMax, const Rectangle &clippingRect, uint32_t shaderId, void *userData) {
+        if (valuesCount < 2) 
+            return;
+
+        if (data == nullptr) 
+            return;
+
+        size_t count = valuesCount - 1;
+        size_t requiredVertices = count * 4; // 4 vertices per line
+        size_t requiredIndices = count * 6; // 6 indices per line
+        float plotWidth = size.x;
+        float plotHeight = size.y;
+        float step = plotWidth / valuesCount;
+
+        if (scaleMin == FLT_MAX || scaleMax == FLT_MAX) {
+            float minValue = FLT_MAX;
+            float maxValue = -FLT_MAX;
+
+            for(size_t i = 0; i < valuesCount; i++) {
+                const float v = data[i];
+                if (v != v) // Ignore NaN values
+                    continue;
+                minValue = std::min(minValue, v);
+                maxValue = std::max(maxValue, v);
+            }
+
+            if (scaleMin == FLT_MAX)
+                scaleMin = minValue;
+            if (scaleMax == FLT_MAX)
+                scaleMax = maxValue;
+        }
+
+        auto normalize = [] (float x, float scaleMin, float scaleMax) {
+            if (scaleMax == scaleMin) {
+                return scaleMin; // Handle case where all values are the same
+            }
+            return (x - scaleMin) / (scaleMax - scaleMin); // Normalized to [0, 1]
+        };
+
+        checkTemporaryVertexBuffer(requiredVertices);
+        checkTemporaryIndexBuffer(requiredIndices);
+
+        size_t pointCount = count * 2;
+        size_t vertexIndex = 0;
+        size_t indiceIndex = 0;
+
+        for(size_t i = 0; i < valuesCount -1; i++) {
+            float x1 = position.x + ((i+0) * step);
+            float x2 = position.x + ((i+1) * step);
+            float y1 = position.y + (normalize(data[i], scaleMin, scaleMax) * plotHeight);
+            float y2 = position.y + (normalize(data[i+1], scaleMin, scaleMax) * plotHeight);
+
+            Vector2 p1(x1, y1);
+            Vector2 p2(x2, y2);
+
+            Vector2 direction(p2.x - p1.x, p2.y - p1.y);
+
+            float length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+
+            if (length == 0) 
+                return;
+
+            direction.x /= length;
+            direction.y /= length;
+
+            Vector2 perpendicular(-direction.y * thickness * 0.5f, 
+                                   direction.x * thickness * 0.5f);
+
+            vertexBufferTemp[vertexIndex+0] = { Vector2(p1.x + perpendicular.x, p1.y + perpendicular.y), Vector2(0, 1), color };
+            vertexBufferTemp[vertexIndex+1] = { Vector2(p1.x - perpendicular.x, p1.y - perpendicular.y), Vector2(0, 0), color };
+            vertexBufferTemp[vertexIndex+2] = { Vector2(p2.x - perpendicular.x, p2.y - perpendicular.y), Vector2(1, 0), color };
+            vertexBufferTemp[vertexIndex+3] = { Vector2(p2.x + perpendicular.x, p2.y + perpendicular.y), Vector2(1, 1), color };
+
+            indexBufferTemp[indiceIndex+0] = 0 + vertexIndex;
+            indexBufferTemp[indiceIndex+1] = 1 + vertexIndex;
+            indexBufferTemp[indiceIndex+2] = 2 + vertexIndex;
+            indexBufferTemp[indiceIndex+3] = 0 + vertexIndex;
+            indexBufferTemp[indiceIndex+4] = 2 + vertexIndex;
+            indexBufferTemp[indiceIndex+5] = 3 + vertexIndex;
+
+            vertexIndex += 4;
+            indiceIndex += 6;
+        }
+
+        DrawCommand command;
+        command.vertices = vertexBufferTemp.data();
+        command.indices = indexBufferTemp.data();
+        command.numVertices = requiredVertices;
+        command.numIndices = requiredIndices;
+        command.textureId = textureId;
+        command.textureIsFont = false;
+        command.shaderId = shaderId;
+        command.clippingRect = clippingRect;
+        command.userData = userData;
+
+        addVertices(&command);
     }
 
-    void Graphics::addTriangle(const Vector3 &position, const Vector2 &size, float rotationDegrees, const Color &color, const Rectangle &clippingRect, uint32_t shaderId) {
+    void Graphics::addTriangle(const Vector2 &position, const Vector2 &size, float rotationDegrees, const Color &color, const Rectangle &clippingRect, uint32_t shaderId, void *userData) {
         float halfWidth = 1.0f * 0.5f;
         float halfHeight = 1.0f * 0.5f;
 
-        Vector2 vertex1(0.0f, halfHeight); // Top vertex
-        Vector2 vertex2(-halfWidth, -halfHeight); // Bottom-left vertex
-        Vector2 vertex3(halfWidth, -halfHeight); // Bottom-right vertex
+        // Vector2 vertex1(0.0f, halfHeight); // Top vertex
+        // Vector2 vertex2(-halfWidth, -halfHeight); // Bottom-left vertex
+        // Vector2 vertex3(halfWidth, -halfHeight); // Bottom-right vertex
+
+        const float radius = size.x / sqrt(3); // Calculate the radius
+
+        Vector2 vertex1(position.x, position.y + radius); // Top vertex
+        Vector2 vertex2(position.x - radius * sin(M_PI / 3), position.y - radius * cos(M_PI / 3)); // Bottom-left vertex
+        Vector2 vertex3(position.x + radius * sin(M_PI / 3), position.y - radius * cos(M_PI / 3)); // Bottom-right vertex
 
         Vector2 uv1(0.5f, 1.0f); // Top vertex UV
         Vector2 uv2(0.0f, 0.0f); // Bottom-left vertex UV
         Vector2 uv3(1.0f, 0.0f); // Bottom-right vertex UV
 
+        // Vertex vertices[3] = {
+        //     { Vector2(position.x + (vertex1.x * size.x), position.y + (vertex1.y * size.y)), uv1, color},
+        //     { Vector2(position.x + (vertex2.x * size.x), position.y + (vertex2.y * size.y)), uv2, color},
+        //     { Vector2(position.x + (vertex3.x * size.x), position.y + (vertex3.y * size.y)), uv3, color}
+        // };
+
         Vertex vertices[3] = {
-            { Vector3(position.x + (vertex1.x * size.x), position.y + (vertex1.y * size.y), position.z), uv1, color},
-            { Vector3(position.x + (vertex2.x * size.x), position.y + (vertex2.y * size.y), position.z), uv2, color},
-            { Vector3(position.x + (vertex3.x * size.x), position.y + (vertex3.y * size.y), position.z), uv3, color}
+            { vertex1, uv1, color},
+            { vertex2, uv2, color},
+            { vertex3, uv3, color}
         };
 
         if(rotationDegrees != 0.0f)
@@ -409,11 +504,54 @@ namespace vexed {
         command.textureIsFont = false;
         command.shaderId = shaderId;
         command.clippingRect = clippingRect;
+        command.userData = userData;
 
         addVertices(&command);
     }
 
-    void Graphics::addText(const Vector3 &position, Font *font, const std::string &text, float fontSize, const Color &color, const Rectangle &clippingRect) {
+    struct TextColorInfo {
+        size_t index;
+        Color color;
+    };
+
+    static void parseColorsFromText(std::string &text, TextColorInfo *colors, size_t size, size_t &count) {
+        size_t pos = 0;
+        size_t textLength = text.length();
+
+        while (pos < textLength) {
+            // Find the opening brace
+            size_t start = text.find('{', pos);
+            if (start == std::string::npos) break;
+
+            // Find the closing brace
+            size_t end = text.find('}', start);
+            if (end == std::string::npos) break;
+
+            // Extract the color code
+            std::string colorCode = text.substr(start + 1, end - start - 1);
+            
+            // Validate the length of the color code
+            if (colorCode.length() == 8) {
+                float r = static_cast<float>(std::stoi(colorCode.substr(0, 2), nullptr, 16));
+                float g = static_cast<float>(std::stoi(colorCode.substr(2, 2), nullptr, 16));
+                float b = static_cast<float>(std::stoi(colorCode.substr(4, 2), nullptr, 16));
+                float a = static_cast<float>(std::stoi(colorCode.substr(6, 2), nullptr, 16));
+
+                if (count < size) {
+                    colors[count++] = {start, Color{r, g, b, a}};
+                }
+            }
+
+            // Erase the color code from the text
+            text.erase(start, end - start + 1);
+
+            // Update position
+            pos = start; // Stay at the same position to check for more colors
+            textLength = text.length(); // Update text length
+        }
+    }
+
+    void Graphics::addText(const Vector2 &position, Font *font, bool richText, const std::string &text, float fontSize, const Color &color, const Rectangle &clippingRect) {
         if(!font)
             return;
         if(text.size() == 0)
@@ -438,8 +576,26 @@ namespace vexed {
         size_t vertexIndex = 0;
         size_t indiceIndex = 0;
 
-        for(size_t i = 0; i < text.size(); i++) {
-            char ch = text[i];
+        constexpr size_t colorSize = 128;
+        TextColorInfo textColorInfo[colorSize];
+        size_t colorCount = 0;
+        size_t colorIndex = 0;
+
+        std::string currentText = text;
+
+        auto containsBraces = [] (const std::string& text) -> bool {
+            return (text.find('{') != std::string::npos) || (text.find('}') != std::string::npos);
+        };
+
+        if(richText) {
+            if(containsBraces(currentText))
+                parseColorsFromText(currentText, textColorInfo, colorSize, colorCount);
+        }
+        
+        Color currentColor = color;
+
+        for(size_t i = 0; i < currentText.size(); i++) {
+            char ch = currentText[i];
 
             if(ch == '\n') {
                 pos.x = originX;
@@ -481,10 +637,17 @@ namespace vexed {
                 { alignedQuad->s1, alignedQuad->t1 },
             };
 
-            vertexBufferTemp[vertexIndex+0] = { Vector3(glyphVertices[0].x, glyphVertices[0].y, position.z), glyphTextureCoords[0], color };
-            vertexBufferTemp[vertexIndex+1] = { Vector3(glyphVertices[1].x, glyphVertices[1].y, position.z), glyphTextureCoords[1], color };
-            vertexBufferTemp[vertexIndex+2] = { Vector3(glyphVertices[2].x, glyphVertices[2].y, position.z), glyphTextureCoords[2], color };
-            vertexBufferTemp[vertexIndex+3] = { Vector3(glyphVertices[3].x, glyphVertices[3].y, position.z), glyphTextureCoords[3], color };
+            if(colorCount > 0) {
+                if (colorIndex < colorCount && textColorInfo[colorIndex].index == i) {
+                    currentColor = textColorInfo[colorIndex].color; // Update to the new color
+                    colorIndex++; // Move to the next color
+                }
+            }
+
+            vertexBufferTemp[vertexIndex+0] = { Vector2(glyphVertices[0].x, glyphVertices[0].y), glyphTextureCoords[0], currentColor };
+            vertexBufferTemp[vertexIndex+1] = { Vector2(glyphVertices[1].x, glyphVertices[1].y), glyphTextureCoords[1], currentColor };
+            vertexBufferTemp[vertexIndex+2] = { Vector2(glyphVertices[2].x, glyphVertices[2].y), glyphTextureCoords[2], currentColor };
+            vertexBufferTemp[vertexIndex+3] = { Vector2(glyphVertices[3].x, glyphVertices[3].y), glyphTextureCoords[3], currentColor };
 
             indexBufferTemp[indiceIndex+0] = 0 + vertexIndex;
             indexBufferTemp[indiceIndex+1] = 1 + vertexIndex;
@@ -508,25 +671,22 @@ namespace vexed {
         command.textureIsFont = true;
         command.shaderId = this->shaderId;
         command.clippingRect = clippingRect;
+        command.userData = nullptr;
 
         addVertices(&command);
     }
 
-    void Graphics::addImage(const Vector3 &position, const Vector2 &size, uint32_t textureId, const Color &color) {
-        addImage(position, size, 0, textureId, color, Vector2(0, 0), Vector2(1, 1), Rectangle(0, 0, 0, 0), 0);
-    }
-
-    void Graphics::addImage(const Vector3 &position, const Vector2 &size, float rotationDegrees, uint32_t textureId, const Color &color, const Vector2 &uv0, const Vector2 &uv1, const Rectangle &clippingRect, uint32_t shaderId) {
+    void Graphics::addImage(const Vector2 &position, const Vector2 &size, float rotationDegrees, uint32_t textureId, const Color &color, const Vector2 &uv0, const Vector2 &uv1, const Rectangle &clippingRect, uint32_t shaderId, void *userData) {
         Vector2 uvTopLeft = Vector2(uv0.x, uv0.y);
         Vector2 uvBottomLeft = Vector2(uv0.x, uv1.y);
         Vector2 uvBottomRight = Vector2(uv1.x, uv1.y);
         Vector2 uvTopRight = Vector2(uv1.x, uv0.y);
 
         Vertex vertices[4] = {
-            { Vector3(position.x, position.y, position.z), uvTopLeft, color }, // top left
-            { Vector3(position.x, position.y + size.y, position.z), uvBottomLeft, color }, // bottom left
-            { Vector3(position.x + size.x, position.y + size.y, position.z), uvBottomRight, color }, // bottom right
-            { Vector3(position.x + size.x, position.y, position.z), uvTopRight, color }  // top right
+            { Vector2(position.x, position.y), uvTopLeft, color }, // top left
+            { Vector2(position.x, position.y + size.y), uvBottomLeft, color }, // bottom left
+            { Vector2(position.x + size.x, position.y + size.y), uvBottomRight, color }, // bottom right
+            { Vector2(position.x + size.x, position.y), uvTopRight, color }  // top right
         };
 
         if(rotationDegrees != 0.0f)
@@ -546,6 +706,7 @@ namespace vexed {
         command.textureIsFont = false;
         command.shaderId = shaderId;
         command.clippingRect = clippingRect;
+        command.userData = userData;
 
         addVertices(&command);
     }
@@ -643,10 +804,11 @@ namespace vexed {
         items[itemCount].textureId = command->textureId;
         items[itemCount].textureIsFont = command->textureIsFont;
         items[itemCount].clippingRect = command->clippingRect;
+        items[itemCount].userData = command->userData;
 
         Rectangle &rect = items[itemCount].clippingRect;
 
-        if(!rect.IsZero()) {
+        if(!rect.isZero()) {
             rect.y = viewport.height - rect.y - rect.height;
         }
 
@@ -701,7 +863,7 @@ namespace vexed {
 
         glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), nullptr, GL_DYNAMIC_DRAW);
 
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, position));
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, position));
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)offsetof(Vertex, uv));
         glEnableVertexAttribArray(1);
@@ -748,7 +910,7 @@ namespace vexed {
 
     void Graphics::createShader() {
         std::string vertexSource = R"(#version 330 core
-layout(location = 0) in vec3 aPosition;
+layout(location = 0) in vec2 aPosition;
 layout(location = 1) in vec2 aTexCoord;
 layout(location = 2) in vec4 aColor;
 
@@ -757,7 +919,7 @@ out vec2 oTexCoord;
 out vec4 oColor;
 
 void main() {
-    gl_Position = uProjection * vec4(aPosition, 1.0);
+    gl_Position = uProjection * vec4(aPosition.x, aPosition.y, 0.0, 1.0);
     oTexCoord = aTexCoord;
     oColor = aColor;
 })";
@@ -776,11 +938,11 @@ void main() {
         vec4 sample = texture(uTexture, oTexCoord);
         if(sample.r == 0)
             discard;
-        FragColor = sample.r * oColor;
-        //float d = sample.r;
-        //float aaf = fwidth(d);
-        //float alpha = smoothstep(0.5 - aaf, 0.5 + aaf, d);
-        //FragColor = vec4(oColor.rgb, alpha) * oColor;
+        //FragColor = sample.r * oColor;
+        float d = sample.r;
+        float aaf = fwidth(d);
+        float alpha = smoothstep(0.5 - aaf, 0.5 + aaf, d);
+        FragColor = vec4(oColor.rgb, alpha) * oColor;
     } else {
         FragColor = texture(uTexture, oTexCoord) * oColor;
     }

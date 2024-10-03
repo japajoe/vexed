@@ -258,7 +258,7 @@ namespace vexed {
         Menu = GLFW__KEY_MENU
     };
 
-struct KeyState {
+    struct KeyState {
         int down;
         int up;
         int pressed;
@@ -278,12 +278,16 @@ struct KeyState {
 
     using CharPressEvent = std::function<void(uint32_t codepoint)>;
     using KeyDownEvent = std::function<void(KeyCode keycode)>;
+    using KeyUpEvent = std::function<void(KeyCode keycode)>;
+    using KeyPressEvent = std::function<void(KeyCode keycode)>;
     using KeyRepeatEvent = std::function<void(KeyCode keycode)>;
 
     class Keyboard {
     public:
-        CharPressEvent charPressed;
+        CharPressEvent charPress;
         KeyDownEvent keyDown;
+        KeyUpEvent keyUp;
+        KeyPressEvent keyPress;
         KeyRepeatEvent keyRepeat;
         Keyboard();
         void initialize();

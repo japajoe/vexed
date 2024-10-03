@@ -15,9 +15,12 @@ include_directories(
     "${PROJECT_SOURCE_DIR}/include/glfw"
     "${PROJECT_SOURCE_DIR}/include/stb"
     "${PROJECT_SOURCE_DIR}/include/vexed"
+    "${PROJECT_SOURCE_DIR}/include/vexed/core"
+    "${PROJECT_SOURCE_DIR}/include/vexed/widgets"
+    "${PROJECT_SOURCE_DIR}/include/vexed/widgets/interfaces"
 )
 
-add_library(${PROJECT_NAME} SHARED ${SOURCES})
+add_library(${PROJECT_NAME} STATIC ${SOURCES})
 
 #On windows you only need to link glfw
 target_link_libraries(${PROJECT_NAME} glfw -pthread -ldl -lm)

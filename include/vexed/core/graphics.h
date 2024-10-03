@@ -18,16 +18,6 @@ namespace vexed {
             : x(x), y(y) {}
     };
 
-    struct Vector3 {
-        float x;
-        float y;
-        float z;
-        Vector3() 
-            : x(0), y(0), z(0) {}
-        Vector3(float x, float y, float z) 
-            : x(x), y(y), z(z) {}
-    };
-
     struct Rectangle {
         float x;
         float y;
@@ -37,8 +27,13 @@ namespace vexed {
             : x(0), y(0), width(0), height(0) {}
         Rectangle(float x, float y, float width, float height) 
             : x(x), y(y), width(width), height(height) {}
-        bool IsZero() const {
+        bool isZero() const {
             return x == 0.0f && y == 0.0f && width == 0.0f && height == 0.0f;
+        }
+        static Rectangle getRectAtRowAndColumn(float leftIndent, float topIndent, float width, float height, int row, int column, int offsetX = 0, int offsetY = 0) {
+            float x = leftIndent + (column * (width + offsetX));
+            float y = topIndent + (row * (height + offsetY));
+            return Rectangle(x, y, width, height);
         }
     };
 
@@ -175,20 +170,20 @@ namespace vexed {
     };
 
     struct Vertex {
-        Vector3 position;
+        Vector2 position;
         Vector2 uv;
         Color color;
         Vertex() : 
-            position(Vector3(0, 0, 0)), 
+            position(Vector2(0, 0)), 
             uv(Vector2(0, 0)), 
             color(Color(1.0f, 1.0f, 1.0f, 1.0f)) {}
 
-        Vertex(const Vector3 &position, const Vector2 &uv) :
+        Vertex(const Vector2 &position, const Vector2 &uv) :
             position(position), 
             uv(uv),
             color(Color(1.0f, 1.0f, 1.0f, 1.0f)) {}
 
-        Vertex(const Vector3 &position, const Vector2 &uv, const Color &color) :
+        Vertex(const Vector2 &position, const Vector2 &uv, const Color &color) :
             position(position), 
             uv(uv), 
             color(color) {}
@@ -203,6 +198,7 @@ namespace vexed {
         size_t indiceOffset;
         bool textureIsFont;
         Rectangle clippingRect;
+        void *userData;
     };
 
     struct DrawCommand {
@@ -214,13 +210,15 @@ namespace vexed {
         uint32_t shaderId;
         bool textureIsFont;
         Rectangle clippingRect;
+        void *userData;
         DrawCommand() : vertices(nullptr), 
             numVertices(0), 
             indices(nullptr), 
             numIndices(0), 
             textureId(0), 
             textureIsFont(false),
-            clippingRect(Rectangle(0, 0, 0, 0)) {}
+            clippingRect(Rectangle(0, 0, 0, 0)),
+            userData(nullptr) {}
     };
 
     struct Viewport {
@@ -247,7 +245,7 @@ namespace vexed {
         Uniform_COUNT
     };
 
-    using UniformUpdateCallback = std::function<void(uint32_t shaderId)>;
+    using UniformUpdateCallback = std::function<void(uint32_t shaderId, void *userData)>;
 
     class Graphics {
     public:
@@ -256,19 +254,14 @@ namespace vexed {
         void initialize();
         void deinitialize();
         void newFrame(float deltaTime);
-        void addRectangle(const Vector3 &position, const Vector2 &size, const Color &color);
-        void addRectangle(const Vector3 &position, const Vector2 &size, float rotationDegrees, const Color &color, const Rectangle &clippingRect = Rectangle(0, 0, 0, 0), uint32_t shaderId = 0);
-        void addCircle(const Vector3 &position, float radius, int segments, const Color &color);
-        void addCircle(const Vector3 &position, float radius, int segments, float rotationDegrees, const Color &color, const Rectangle &clippingRect = Rectangle(0, 0, 0, 0), uint32_t shaderId = 0);
-        void addLine(const Vector3 &p1, const Vector3 &p2, float thickness, const Color &color);
-        void addLine(const Vector3 &p1, const Vector3 &p2, float thickness, const Color &color, const Rectangle &clippingRect = Rectangle(0, 0, 0, 0), uint32_t shaderId = 0);
-        void addLines(const Vector3 *segments, size_t count, float thickness, const Color &color);
-        void addLines(const Vector3 *segments, size_t count, float thickness, const Color &color, const Rectangle &clippingRect = Rectangle(0, 0, 0, 0), uint32_t shaderId = 0);
-        void addTriangle(const Vector3 &position, const Vector2 &size, const Color &color);
-        void addTriangle(const Vector3 &position, const Vector2 &size, float rotationDegrees, const Color &color, const Rectangle &clippingRect = Rectangle(0, 0, 0, 0), uint32_t shaderId = 0);
-        void addText(const Vector3 &position, Font *font, const std::string &text, float fontSize, const Color &color, const Rectangle &clippingRect = Rectangle(0, 0, 0, 0));
-        void addImage(const Vector3 &position, const Vector2 &size, uint32_t textureId, const Color &color = Color(1, 1, 1, 1));
-        void addImage(const Vector3 &position, const Vector2 &size, float rotationDegrees, uint32_t textureId, const Color &color = Color(1, 1, 1, 1), const Vector2 &uv0 = Vector2(0, 0), const Vector2 &uv1 = Vector2(1, 1), const Rectangle &clippingRect = Rectangle(0, 0, 0, 0), uint32_t shaderId = 0);
+        void addRectangle(const Vector2 &position, const Vector2 &size, float rotationDegrees, const Color &color, const Rectangle &clippingRect = Rectangle(0, 0, 0, 0), uint32_t shaderId = 0, void *userData = nullptr);
+        void addCircle(const Vector2 &position, float radius, int segments, float rotationDegrees, const Color &color, const Rectangle &clippingRect = Rectangle(0, 0, 0, 0), uint32_t shaderId = 0, void *userData = nullptr);
+        void addLine(const Vector2 &p1, const Vector2 &p2, float thickness, const Color &color, const Rectangle &clippingRect = Rectangle(0, 0, 0, 0), uint32_t shaderId = 0, void *userData = nullptr);
+        void addLines(const Vector2 *segments, size_t count, float thickness, const Color &color, const Rectangle &clippingRect = Rectangle(0, 0, 0, 0), uint32_t shaderId = 0, void *userData = nullptr);
+        void addPlotLines(const Vector2 &position, const Vector2 &size, const float *data, int valuesCount, float thickness, const Color &color, float scaleMin = 3.402823466e+38F, float scaleMax = 3.402823466e+38F, const Rectangle &clippingRect = Rectangle(0, 0, 0, 0), uint32_t shaderId = 0, void *userData = nullptr);
+        void addTriangle(const Vector2 &position, const Vector2 &size, float rotationDegrees, const Color &color, const Rectangle &clippingRect = Rectangle(0, 0, 0, 0), uint32_t shaderId = 0, void *userData = nullptr);
+        void addText(const Vector2 &position, Font *font, bool richText, const std::string &text, float fontSize, const Color &color, const Rectangle &clippingRect = Rectangle(0, 0, 0, 0));
+        void addImage(const Vector2 &position, const Vector2 &size, float rotationDegrees, uint32_t textureId, const Color &color = Color(1, 1, 1, 1), const Vector2 &uv0 = Vector2(0, 0), const Vector2 &uv1 = Vector2(1, 1), const Rectangle &clippingRect = Rectangle(0, 0, 0, 0), uint32_t shaderId = 0, void *userData = nullptr);
         inline Viewport getViewport() const { return viewport; }
         void setViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
         inline Color getClearColor() const { return clearColor; }

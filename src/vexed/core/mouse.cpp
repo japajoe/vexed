@@ -1,7 +1,10 @@
 #include "mouse.h"
+#include "../../glfw/glfw3.h"
 
 namespace vexed {
     Mouse::Mouse() {
+        repeatDelay = 0.5; // Delay before repeat starts
+        repeatInterval = 0.025; // Interval for repeat
     }
 
     void Mouse::initialize() {
@@ -26,9 +29,34 @@ namespace vexed {
                 if(states[button].down == 0) {
                     states[button].down = 1;
                     states[button].pressed = 0;
+                    states[button].lastRepeatTime = glfwGetTime();
+                    states[button].repeat = false;
+                    if(buttonDown)
+                        buttonDown(button);
                 } else {
                     states[button].down = 1;
                     states[button].pressed = 1;
+
+                    double currentTime = glfwGetTime();
+                    double elapsed = currentTime - states[button].lastRepeatTime;
+
+                    if (!states[button].repeat) {
+                        if (elapsed >= repeatDelay) {
+                            if(buttonRepeat)
+                                buttonRepeat(button);
+                            states[button].repeat = true;
+                            states[button].lastRepeatTime = currentTime;
+                        }
+                    } else {
+                        if (elapsed >= repeatInterval) {
+                            if(buttonRepeat)
+                                buttonRepeat(button);
+                            states[button].lastRepeatTime = currentTime;
+                        }
+                    }
+
+                    if(buttonPress)
+                        buttonPress(button);
                 }
 
                 states[button].up = 0;
@@ -37,6 +65,8 @@ namespace vexed {
                     states[button].down = 0;
                     states[button].pressed = 0;
                     states[button].up = 1;
+                    if(buttonUp)
+                        buttonUp(button);
                 } else {
                     states[button].down = 0;
                     states[button].pressed = 0;
@@ -62,6 +92,11 @@ namespace vexed {
 
         deltaX = x - prevX;
         deltaY = y - prevY;
+    }
+
+    void Mouse::setWindowPosition(float x, float y) {
+        windowPositionX = x;
+        windowPositionY = y;
     }
 
     void Mouse::setScrollDirection(float x, float y) {
@@ -94,6 +129,14 @@ namespace vexed {
 
     float Mouse::getY() const {
         return positionY;
+    }
+
+    float Mouse::getAbsoluteX() const {
+        return windowPositionX + positionX;
+    }
+
+    float Mouse::getAbsoluteY() const {
+        return windowPositionY + positionY;
     }
 
     float Mouse::getDeltaX() const {

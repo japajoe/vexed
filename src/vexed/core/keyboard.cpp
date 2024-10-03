@@ -1,5 +1,5 @@
 #include "keyboard.h"
-#include "../glfw/glfw3.h"
+#include "../../glfw/glfw3.h"
 
 namespace vexed {
     Keyboard::Keyboard() {
@@ -164,7 +164,10 @@ namespace vexed {
                                 keyRepeat(key);
                             states[key].lastRepeatTime = currentTime;
                         }
-                    } 
+                    }
+                    
+                    if(keyPress)
+                        keyPress(key);
                 }
 
                 states[key].up = 0;
@@ -173,6 +176,8 @@ namespace vexed {
                     states[key].down = 0;
                     states[key].pressed = 0;
                     states[key].up = 1;
+                    if(keyUp)
+                        keyUp(key);
                 } else {
                     states[key].down = 0;
                     states[key].pressed = 0;
@@ -188,8 +193,8 @@ namespace vexed {
 
     void Keyboard::addInputCharacter(uint32_t codepoint) {
         if(codepoint > 0) {
-            if(charPressed)
-                charPressed(codepoint);
+            if(charPress)
+                charPress(codepoint);
         }
     }
 

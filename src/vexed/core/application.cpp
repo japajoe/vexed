@@ -1,10 +1,12 @@
 #include "application.h"
 #include "image.h"
-#include "../glad/glad.h"
-#include "../glfw/glfw3.h"
+#include "../../glad/glad.h"
+#include "../../glfw/glfw3.h"
 #include <iostream>
 
 namespace vexed {
+    Application *Application::instance = nullptr;
+
     Application::Application() 
         : window(nullptr), monitor(nullptr) {
         config.title = "Vexed";
@@ -13,10 +15,12 @@ namespace vexed {
         config.flags = WindowFlags_VSync;
         config.iconData = nullptr;
         config.iconDataSize = 0;
+        instance = this;
     }
 
     Application::Application(const Configuration &config) 
         : config(config), window(nullptr), monitor(nullptr) {
+        instance = this;
     }
     
     void Application::run() {
@@ -85,8 +89,8 @@ namespace vexed {
         glfwSetKeyCallback(window, onKeyPress);
         glfwSetCharCallback(window, onCharPress);
         glfwSetMouseButtonCallback(window, onMouseButtonPress);
-        glfwSetCursorPosCallback(window, onMouseMove);
         glfwSetScrollCallback(window, onMouseScroll);
+        glfwSetWindowPosCallback(window, onWindowPos);
 
         graphics.initialize();
         graphics.setClearColor(Color(0, 0, 0, 1));
@@ -98,11 +102,19 @@ namespace vexed {
         if(load)
             load(this);
 
+        double cursorPosX;
+        double cursorPosY;
         float elapsedTime = 0.0f;
         int fps = 0;
 
         while (!glfwWindowShouldClose(window)) {
             timer.update();
+
+            //Cursor pos callback is not called when mouse is outside the bounds of the window
+            //This causes rectangle tests to report false positives when they are on any edge of the window
+            //and the mouse is outside of bounds.
+            glfwGetCursorPos(window, &cursorPosX, &cursorPosY);
+            mouse.setPosition(cursorPosX, cursorPosY);
 
             elapsedTime += timer.deltaTime;
             fps++;
@@ -144,6 +156,14 @@ namespace vexed {
         }
     }
 
+    void Application::onWindowPos(GLFWwindow *window, int xpos, int ypos) {
+        void *userData = glfwGetWindowUserPointer(window);
+        if(userData) {
+            Application *application = reinterpret_cast<Application*>(userData);
+            application->mouse.setWindowPosition(xpos, ypos);
+        }
+    }
+
     void Application::onKeyPress(GLFWwindow *window, int32_t key, int32_t scancode, int32_t action, int32_t mods) {
         void *userData = glfwGetWindowUserPointer(window);
         if(userData) {
@@ -165,14 +185,6 @@ namespace vexed {
         if(userData) {
             Application *application = reinterpret_cast<Application*>(userData);
             application->mouse.setState(static_cast<ButtonCode>(button), action > 0 ? 1 : 0);
-        }
-    }
-
-    void Application::onMouseMove(GLFWwindow *window, double x, double y) {
-        void *userData = glfwGetWindowUserPointer(window);
-        if(userData) {
-            Application *application = reinterpret_cast<Application*>(userData);
-            application->mouse.setPosition(x, y);
         }
     }
 
